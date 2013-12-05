@@ -9,13 +9,14 @@
 #include <pthread.h>
 
 #include "hnfs/post.h"
+#include "hnfs/decls.h"
 
 static const char *hello_const_str = "Hello World!\n";
 static const char *hello_path = "/hello";
 
 static char hello_str[255];
 
-static struct hnfs_post *posts;
+static hnfs_post_t posts[HNFS_NUM_POSTS];
 static pthread_mutex_t posts_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 int
@@ -69,12 +70,11 @@ static int hnfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
     filler(buf, ".", NULL, 0);
     filler(buf, "..", NULL, 0);
 
-    struct hnfs_post *temp = posts;
-    for (struct hnfs_post **cur = &temp; *cur != NULL; *cur = (*cur)->next) {
-      fprintf(stderr, "adding post %s\n", (*cur)->title);
-      filler(buf, (*cur)->title, NULL, 0);
+    hnfs_post_t *temp = posts;
+    for (int i = 0; i < HNFS_NUM_POSTS; i++) {
+      fprintf(stderr, "adding post %s\n", posts[i].title);
+      filler(buf, posts[i].title, NULL, 0);
     }
-    filler(buf, "This is just past", NULL, 0);
     return 0;
   } else {
     return -ENOENT;
@@ -129,14 +129,10 @@ int
 main(int argc, char **argv)
 {
   strcpy(hello_str, hello_const_str);
-  struct hnfs_post test_posts[2];
 
-  test_posts[0].title = "post1";
-  test_posts[0].next = &test_posts[1];
-  test_posts[1].title = "post2";
-  test_posts[1].next = NULL;
-
-  posts = &test_posts[0];
+  for (int i = 0; i < HNFS_NUM_POSTS; i++) {
+    posts[i].title = "test title";
+  }
   
   curl_global_init(CURL_GLOBAL_ALL);
   return fuse_main(argc, argv, &hnfs_oper, NULL);

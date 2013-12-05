@@ -3,16 +3,12 @@
 
 #include <stdlib.h>
 
-/* forward declare post */
-struct hnfs_post;
-
-struct hnfs_post {
+typedef struct hnfs_post {
   char *title;
   char *url;
   char *user;
   char *id;
-  struct hnfs_post *next;
-};
+} hnfs_post_t;
 
 size_t
 hnfs_posts_libcurl_writer(void *buffer, size_t size, size_t nmemb, void *userp);

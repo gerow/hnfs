@@ -12,7 +12,6 @@ CFLAGS      += -Ilibs/jsmn
 
 all: hnfs
 
-
 libs/jsmn/jsmn.o:
 	$(MAKE) -C libs/jsmn
 
@@ -20,9 +19,10 @@ post.o: post.c include/hnfs/post.h
 	$(CC) -c $(CFLAGS) post.c -o post.o
 
 hnfs: hnfs.c include/hnfs/post.h post.o libs/jsmn/jsmn.o
-	$(CC) $(CFLAGS) $(FUSE_LIBS) $(CURL_LIBS) $(PTHREAD_LIBS) post.o\
+	$(CC) $(CFLAGS) $(FUSE_LIBS) $(CURL_LIBS) $(PTHREAD_LIBS) post.o \
 	  libs/jsmn/jsmn.o hnfs.c -o hnfs
 
 clean:
-	rm hnfs post.o || true
+	rm -f hnfs
+	rm -f post.o
 	$(MAKE) -C libs/jsmn clean
