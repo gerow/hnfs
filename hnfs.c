@@ -16,27 +16,16 @@ static const char *hello_path = "/hello";
 
 static char hello_str[255];
 
-static hnfs_post_t posts[HNFS_NUM_POSTS];
-static pthread_mutex_t posts_mutex = PTHREAD_MUTEX_INITIALIZER;
-
-int
-update_posts()
-{
-  CURL *curl;
-  CURLcode res;
-
-  curl = curl_easy_init();
-  curl_easy_setopt(curl, CURLOPT_URL, "http://hndroidapi.appspot.com/news/format/json/page/?appid=hnfs&callback=&guid=token?");
-  curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, hnfs_posts_libcurl_writer);
-  curl_easy_setopt(curl, CURLOPT_WRITEDATA, &posts);
-  curl_easy_perform(curl);
-  curl_easy_cleanup(curl);
-}
+static hnfs_post_collection_t post_collection = {
+  .mutex = PTHREAD_MUTEX_INITIALIZER
+};
 
 static int hnfs_getattr(const char *path, struct stat *stbuf)
 {
   fprintf(stderr, "getattr called for %s\n", path);
   int res = 0;
+
+  hnfs_post_update(&post_collection);
 
   memset(stbuf, 0, sizeof (struct stat));
   /*if (strcmp(path, "/") == 0) {
@@ -61,8 +50,8 @@ static int hnfs_getattr(const char *path, struct stat *stbuf)
 static int hnfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
                         off_t offset, struct fuse_file_info *fi)
 {
-  //(void) offset;
-  //(void) fi;
+  (void) offset;
+  (void) fi;
   
   fprintf(stderr, "readdir called for %s\n", path);
 
@@ -70,10 +59,9 @@ static int hnfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
     filler(buf, ".", NULL, 0);
     filler(buf, "..", NULL, 0);
 
-    hnfs_post_t *temp = posts;
     for (int i = 0; i < HNFS_NUM_POSTS; i++) {
-      fprintf(stderr, "adding post %s\n", posts[i].title);
-      filler(buf, posts[i].title, NULL, 0);
+      fprintf(stderr, "adding post %s\n", post_collection.posts[i].title);
+      filler(buf, post_collection.posts[i].title, NULL, 0);
     }
     return 0;
   } else {
@@ -130,9 +118,9 @@ main(int argc, char **argv)
 {
   strcpy(hello_str, hello_const_str);
 
-  for (int i = 0; i < HNFS_NUM_POSTS; i++) {
+  /*for (int i = 0; i < HNFS_NUM_POSTS; i++) {
     posts[i].title = "test title";
-  }
+  }*/
   
   curl_global_init(CURL_GLOBAL_ALL);
   return fuse_main(argc, argv, &hnfs_oper, NULL);

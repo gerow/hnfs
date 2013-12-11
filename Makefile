@@ -7,6 +7,8 @@ PTHREAD_LIBS = -pthread
 CFLAGS       = `pkg-config --cflags fuse`
 CFLAGS      += -Iinclude
 CFLAGS      += -Ilibs/jsmn
+CFLAGS      += -Wall -Wextra -pedantic
+CFLAGS      += -g
 
 .PHONY: all clean
 
@@ -18,9 +20,12 @@ libs/jsmn/jsmn.o:
 post.o: post.c include/hnfs/post.h
 	$(CC) -c $(CFLAGS) post.c -o post.o
 
-hnfs: hnfs.c include/hnfs/post.h post.o libs/jsmn/jsmn.o
+aldn.o: aldn.c include/aldn/aldn.h
+	$(CC) -c $(CFLAGS) aldn.c -o aldn.o
+
+hnfs: hnfs.c include/hnfs/post.h post.o libs/jsmn/jsmn.o aldn.o
 	$(CC) $(CFLAGS) $(FUSE_LIBS) $(CURL_LIBS) $(PTHREAD_LIBS) post.o \
-	  libs/jsmn/jsmn.o hnfs.c -o hnfs
+	  libs/jsmn/jsmn.o aldn.o hnfs.c -o hnfs
 
 clean:
 	rm -f hnfs

@@ -2,15 +2,23 @@
 #define HNFS_POST_H_
 
 #include <stdlib.h>
+#include <pthread.h>
 
-typedef struct hnfs_post {
-  char *title;
-  char *url;
+#include "hnfs/decls.h"
+
+typedef struct {
+  char title[255];
+  char url[255];
   char *user;
   char *id;
 } hnfs_post_t;
 
-size_t
-hnfs_posts_libcurl_writer(void *buffer, size_t size, size_t nmemb, void *userp);
+typedef struct {
+  hnfs_post_t posts[HNFS_NUM_POSTS];
+  pthread_mutex_t mutex;
+} hnfs_post_collection_t;
+
+int
+hnfs_post_update(hnfs_post_collection_t *collection);
 
 #endif /* HNFS_POST_H_ */
