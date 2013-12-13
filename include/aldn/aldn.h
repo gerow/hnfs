@@ -4,6 +4,14 @@
 #include <jsmn.h>
 #include <stdlib.h>
 
+/*
+ * a library for working with the json tokens we get from jsmn.
+ * the name aldn (aladdin) is just a play off the fact that the
+ * json tokenizer I'm using is called jsmn (jasmine). Of course
+ * jsmn is called jsmn because it looks kinda like json, so we're
+ * getting further and further away from the actual meaning this way 
+ */
+
 typedef struct {
   char *json;
   jsmntok_t *tokens;

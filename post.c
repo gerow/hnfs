@@ -68,20 +68,42 @@ fetch_url(char *url, curl_saver_t *saver)
 static int
 load_file(char *filename, char **buffer)
 {
+  int ret = 0;
+
   FILE *f = fopen(filename, "r");
   if (f == NULL) {
     perror("failed to load file");
     exit(1);
   }
-  fseek(f, 0, SEEK_END);
+  ret = fseek(f, 0, SEEK_END);
+  if (ret != 0) {
+    perror("failed to seek to end of file");
+    exit(1);
+  }
   off_t file_size = ftell(f);
-  fseek(f, 0, SEEK_SET);
+  assert(file_size == 12113);
+  ret = fseek(f, 0, SEEK_SET);
+  if (ret != 0) {
+    perror("failed to seek to end of file");
+    exit(1);
+  }
   *buffer = malloc(file_size + 1);
 
-  fread(*buffer, 1, file_size, f);
-  (*buffer)[file_size + 1] = '\0';
+  ret = fread(*buffer, 1, file_size, f);
+  assert(ret == 12113);
+  (*buffer)[file_size] = '\0';
+  assert(strlen(*buffer) == 12113);
 
-  fclose(f);
+  if (ret != file_size) {
+    perror("failed to read from file");
+    exit(1);
+  }
+
+  ret = fclose(f);
+  if (ret != 0) {
+    perror("failed to close file");
+    exit(1);
+  }
 
   return 0;
 }
@@ -98,6 +120,7 @@ hnfs_post_update(hnfs_post_collection_t *collection)
   //fetch_url(front_page_api_path, &saver);
   //json = saver.data;
   load_file("test.json", &json);
+  assert(strlen(json) == 12113);
 
   /* now get jsmn to parse it into a list of tokens */
   jsmn_parser p;
@@ -105,10 +128,12 @@ hnfs_post_update(hnfs_post_collection_t *collection)
   jsmntok_t tokens[num_tokens];
 
   jsmn_init(&p);
-  int jsmn_res = jsmn_parse(&p, json, tokens, sizeof tokens);
+  assert(strlen(json) == 12113);
+  int jsmn_res = jsmn_parse(&p, json, tokens, 512);
+  assert(strlen(json) == 12113);
   if (jsmn_res != JSMN_SUCCESS) {
     fprintf(stderr, "jsmn had trouble parsing the data, dumping:\n");
-    fprintf(stderr, "%s\n", *json);
+    fprintf(stderr, "%s\n", json);
     exit(1);
   }
 
@@ -132,7 +157,16 @@ hnfs_post_update(hnfs_post_collection_t *collection)
     assert(tokens[cur_post].type == JSMN_OBJECT);
     int title_index = aldn_key_value(&context, cur_post, "title");
     assert(title_index >= 0);
-    aldn_extract_string(&context, title_index, collection->posts[i].title, 255);
+    aldn_extract_string(&context,
+                        title_index,
+                        collection->posts[i].title,
+                        HNFS_POST_STRING_SIZE);
+    int url_index = aldn_key_value(&context, cur_post, "url");
+    assert(url_index >= 0);
+    aldn_extract_string(&context,
+                        url_index,
+                        collection->posts[i].url,
+                        HNFS_POST_STRING_SIZE);
   }
 cleanup_saver:
   free(json);

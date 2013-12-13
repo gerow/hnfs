@@ -24,25 +24,32 @@ static int hnfs_getattr(const char *path, struct stat *stbuf)
 {
   fprintf(stderr, "getattr called for %s\n", path);
   int res = 0;
+  int found_post_entry = 0;
 
   hnfs_post_update(&post_collection);
 
   memset(stbuf, 0, sizeof (struct stat));
-  /*if (strcmp(path, "/") == 0) {
+  if (strcmp(path, "/") == 0) {
     stbuf->st_mode = S_IFDIR | 0755;
     stbuf->st_nlink = 2;
-  } else if (strcmp(path, hello_path) == 0) {
-    stbuf->st_mode = S_IFREG | 0444;
-    stbuf->st_nlink = 1;
-    stbuf->st_size = strlen(hello_str);
   } else {
-    //res = -ENOENT;
-    stbuf->st_mode = S_IFDIR | 0755;
-    stbuf->st_nlink = 2;
-  }*/
-
-  stbuf->st_mode = S_IFDIR | 0755;
-  stbuf->st_nlink = 2;
+    /* hacky, fix... */
+    /* TODO: */
+    path++;
+    pthread_mutex_lock(&post_collection.mutex);
+    for (int i = 0; i < HNFS_NUM_POSTS; i++) {
+      if (strcmp(path, post_collection.posts[i].title) == 0) {
+        found_post_entry = 1;
+        stbuf->st_mode = S_IFDIR | 0755;
+        stbuf->st_nlink = 2;
+        break;
+      }
+    }
+    pthread_mutex_unlock(&post_collection.mutex);
+    if (!found_post_entry) {
+      return -ENOENT;
+    }
+  }
 
   return res;
 }
@@ -58,13 +65,42 @@ static int hnfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
   if (strcmp(path, "/") == 0) {
     filler(buf, ".", NULL, 0);
     filler(buf, "..", NULL, 0);
-
+    hnfs_post_update(&post_collection);
+    pthread_mutex_lock(&post_collection.mutex);
     for (int i = 0; i < HNFS_NUM_POSTS; i++) {
       fprintf(stderr, "adding post %s\n", post_collection.posts[i].title);
       filler(buf, post_collection.posts[i].title, NULL, 0);
     }
+    pthread_mutex_unlock(&post_collection.mutex);
     return 0;
   } else {
+    /* otherwise it's probably trying to find entries for a specific post */
+    int chr_loc = strchr(path, "/");
+    /* it should be 0 since the first char in a path is / */
+    if (chr_loc != 0) {
+      return -ENOENT;
+    }
+    /* get a new pointer to the part of the string after the slash */
+    char *dirname = path + chr_loc + 1;
+    fprintf(stderr, "trying to find %s\n", dirname);
+    pthread_mutex_lock(&post_collection.mutex);
+    int found_post_entry = 0;
+    for (int i = 0; i < HNFS_NUM_POSTS; i++) {
+      if (strcmp(dirname, post_collection.posts[i].title) == 0) {
+        /* great, we found the entry! Now just fill it with a link
+         * to the current dir, previous dir, and a url, and comments file */
+        filler(buf, ".", NULL, 0);
+        filler(buf, "..", NULL, 0);
+        filler(buf, "url", NULL, 0);
+        filler(buf, "comments", NULL, 0);
+        found_post_entry = 1;
+        break;
+      }
+    }
+    pthread_mutex_unlock(&post_collection.mutex);
+    if (found_post_entry) {
+      return 0;
+    }
     return -ENOENT;
   }
 

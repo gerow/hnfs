@@ -7,10 +7,10 @@
 #include "hnfs/decls.h"
 
 typedef struct {
-  char title[255];
-  char url[255];
-  char *user;
-  char *id;
+  char title[HNFS_POST_STRING_SIZE + 1];
+  char url[HNFS_POST_STRING_SIZE + 1];
+  char user[HNFS_POST_STRING_SIZE + 1];
+  char id[HNFS_POST_STRING_SIZE + 1];
 } hnfs_post_t;
 
 typedef struct {
