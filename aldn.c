@@ -1,6 +1,7 @@
 #include "aldn/aldn.h"
 
 #include <assert.h>
+#include <string.h>
 
 int
 aldn_key_value(const aldn_context_t *context,
@@ -15,17 +16,17 @@ aldn_key_value(const aldn_context_t *context,
   /* so the next indexed object should be the first key
    * in the object, unless the objectis empty, but don't
    * worry we handle that! */
-   int i = object_index + 1;
+   unsigned int i = object_index + 1;
    size_t object_end = tokens[object_index].end;
    size_t name_size = strlen(name);
 
    /* so while we aren't past the end of all tokens and  we
     * haven't gone past the end of this object */
-   while (i < num_tokens && tokens[i].start < object_end) {
+   while (i < num_tokens && ((unsigned int) tokens[i].start) < object_end) {
     /* this should always be a key. If it isn't then there's a logic error
      * in this library */
     assert(tokens[i].type == JSMN_STRING);
-    int key_length = tokens[i].end - tokens[i].start;
+    unsigned int key_length = tokens[i].end - tokens[i].start;
     if (name_size == key_length &&
         strncmp(json + tokens[i].start, name, name_size) == 0) {
       return i + 1;
@@ -40,11 +41,13 @@ aldn_key_value(const aldn_context_t *context,
         return -1;
       }
       /* we've walked off the end of the object! */
-      if (tokens[i].start > object_end) {
+      if (((unsigned int) tokens[i].start) > object_end) {
         return -1;
       }
-    } while (tokens[i].start < value_end);
+    } while (((unsigned int) tokens[i].start) < value_end);
   }
+
+  return 0;
 }
 
 int
@@ -53,7 +56,6 @@ aldn_ith_value(const aldn_context_t *context,
                int array_index)
 {
   jsmntok_t *tokens = context->tokens;
-  char *json = context->json;
   size_t num_tokens = context->num_tokens;
 
   assert(tokens[object_index].type = JSMN_ARRAY);
@@ -61,7 +63,7 @@ aldn_ith_value(const aldn_context_t *context,
   if (array_index >= tokens[object_index].size) {
     return -1;
   }
-  int i = object_index + 1;
+  unsigned int i = object_index + 1;
   int cur_array_index = 0;
   while (cur_array_index != array_index) {
     int end = tokens[i].end;
@@ -84,7 +86,7 @@ aldn_extract_string(const aldn_context_t *context,
                     size_t buffer_size)
 {
   jsmntok_t *tokens = context->tokens;
-  int string_len = tokens[string_index].end - tokens[string_index].start;
+  unsigned int string_len = tokens[string_index].end - tokens[string_index].start;
   /* the +1 is for the null character */
   if (string_len + 1 > buffer_size) {
     /* it just won't fit */
@@ -93,4 +95,6 @@ aldn_extract_string(const aldn_context_t *context,
   strncpy(buffer, context->json + tokens[string_index].start, string_len);
   /* throw a null character on the end */
   buffer[string_len] = '\0';
+
+  return 0;
 }

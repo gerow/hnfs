@@ -11,11 +11,6 @@
 #include "hnfs/post.h"
 #include "hnfs/decls.h"
 
-static const char *hello_const_str = "Hello World!\n";
-static const char *hello_path = "/hello";
-
-static char hello_str[255];
-
 static hnfs_post_collection_t post_collection = {
   .mutex = PTHREAD_MUTEX_INITIALIZER
 };
@@ -75,13 +70,13 @@ static int hnfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
     return 0;
   } else {
     /* otherwise it's probably trying to find entries for a specific post */
-    int chr_loc = strchr(path, "/");
+    int chr_loc = 0;
     /* it should be 0 since the first char in a path is / */
     if (chr_loc != 0) {
       return -ENOENT;
     }
     /* get a new pointer to the part of the string after the slash */
-    char *dirname = path + chr_loc + 1;
+    const char *dirname = path + chr_loc + 1;
     fprintf(stderr, "trying to find %s\n", dirname);
     pthread_mutex_lock(&post_collection.mutex);
     int found_post_entry = 0;
@@ -123,6 +118,12 @@ static int hnfs_open(const char *path, struct fuse_file_info *fi)
 static int hnfs_read(const char *path, char *buf, size_t size, off_t offset,
                       struct fuse_file_info *fi)
 {
+  (void) path;
+  (void) buf;
+  (void) size;
+  (void) offset;
+  (void) fi;
+  /*
   fprintf(stderr, "read called for %s\n", path);
 
 
@@ -138,8 +139,9 @@ static int hnfs_read(const char *path, char *buf, size_t size, off_t offset,
   } else {
     size = 0;
   }
+  */
 
-  return size;
+  return 0;
 }
 
 static struct fuse_operations hnfs_oper = {
@@ -152,12 +154,6 @@ static struct fuse_operations hnfs_oper = {
 int
 main(int argc, char **argv)
 {
-  strcpy(hello_str, hello_const_str);
-
-  /*for (int i = 0; i < HNFS_NUM_POSTS; i++) {
-    posts[i].title = "test title";
-  }*/
-  
   curl_global_init(CURL_GLOBAL_ALL);
   return fuse_main(argc, argv, &hnfs_oper, NULL);
 }

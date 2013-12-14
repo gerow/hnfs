@@ -22,9 +22,9 @@ curl_saver(void *buffer, size_t size, size_t nmemb, void *userp)
   curl_saver_t *saver = userp;
 
   fprintf(stderr, "curl_saver called\n");
-  fprintf(stderr, "input size: %u\n", size);
-  fprintf(stderr, "input nmemb: %u\n", nmemb);
-  fprintf(stderr, "saver size: %u\n", saver->size);
+  fprintf(stderr, "input size: %zu\n", size);
+  fprintf(stderr, "input nmemb: %zu\n", nmemb);
+  fprintf(stderr, "saver size: %zu\n", saver->size);
 
   size_t new_size = saver->size + bytes;
 
@@ -61,8 +61,10 @@ fetch_url(char *url, curl_saver_t *saver)
   curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
   curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, curl_saver);
   curl_easy_setopt(curl, CURLOPT_WRITEDATA, saver);
-  curl_easy_perform(curl);
+  res = curl_easy_perform(curl);
   curl_easy_cleanup(curl);
+
+  return 0;
 }
 
 static int
@@ -116,6 +118,7 @@ hnfs_post_update(hnfs_post_collection_t *collection)
   pthread_mutex_lock(&collection->mutex);
   char *json = NULL;
 
+  (void) fetch_url;
   //curl_saver_t saver;
   //fetch_url(front_page_api_path, &saver);
   //json = saver.data;
@@ -168,8 +171,10 @@ hnfs_post_update(hnfs_post_collection_t *collection)
                         collection->posts[i].url,
                         HNFS_POST_STRING_SIZE);
   }
-cleanup_saver:
+/*cleanup_saver:*/
   free(json);
-cleanup_lock:
+/*cleanup_lock:*/
   pthread_mutex_unlock(&collection->mutex);
+
+  return 0;
 }
