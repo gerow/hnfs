@@ -7,13 +7,118 @@
 #include <fcntl.h>
 #include <curl/curl.h>
 #include <pthread.h>
+#include <assert.h>
 
 #include "hnfs/post.h"
 #include "hnfs/decls.h"
 
 static hnfs_post_collection_t post_collection = {
-  .mutex = PTHREAD_MUTEX_INITIALIZER
+  .mutex = PTHREAD_MUTEX_INITIALIZER,
+  .update_time = 0
 };
+
+/* 
+ * incredibly simply function to check if the given path is
+ * the root path
+ */
+int is_root(const char *path)
+{
+  return strcmp(path, "/") == 0;
+}
+
+/* 
+ * Get the depth of a path. 0 Means it is the root path,
+ * 1 means a path like "/thing"
+ * 2 means a path like "/thing/two"
+ */
+int path_depth(const char *path)
+{
+  if (is_root(path)) {
+    return 0;
+  }
+
+  int depth = 0;
+  for ( ;*path != '\0'; path++) {
+    if (*path == '/') {
+      depth++;
+    }
+  }
+
+  if (depth == 0) {
+    return -ENOENT;
+  }
+
+  return depth;
+}
+
+/* 
+ * Get the index of the base path. So if the given path was
+ * "/storyname/url" we would return the index for storyname
+ * in the post_collection
+ */
+int get_level_one_path_index(const char *path)
+{
+  /*
+   * Assume this function is only called when path_depth(path) == 1
+   * or path_depth(path) == 2
+   * so we don't make that check again
+   */
+  path++;
+  char * end_lvl_one_ptr = strchr(path, '/');
+  size_t level_one_size;
+  if (end_lvl_one_ptr) {
+    level_one_size = (end_lvl_one_ptr - path);
+  } else {
+    level_one_size = strlen(path);
+  }
+  assert(level_one_size <= HNFS_POST_STRING_SIZE);
+  for (int i = 0; i < HNFS_NUM_POSTS; i++) {
+    if (strncmp(path, post_collection.posts[i].title, level_one_size)) {
+      return i;
+    }
+  }
+
+  /* entry not found */
+  return -ENOENT;
+}
+
+#define HNFS_SECOND_LEVEL_URL 0
+#define HNFS_SECOND_LEVEL_COMMENTS 1
+#define HNFS_SECOND_LEVEL_CONTENT 2
+/*
+ * Get the second level of the path. If we have something like
+ * "/storyname/url" we would return the number for the url type, which
+ * would be 0 in this case.
+ */
+int get_level_two_path_type(const char *path)
+{
+  /* skip past the first / */
+  path++;
+  /* skip the second / */
+  path = strchr(path, '/');
+  path++;
+  /* extract the level two name */
+  char * end_lvl_two_ptr = strchr(path, '/');
+  size_t level_two_size;
+  if (end_lvl_two_ptr) {
+    level_two_size = (end_lvl_two_ptr - path);
+  } else {
+    level_two_size = strlen(path);
+  }
+
+  assert(level_two_size <= HNFS_POST_STRING_SIZE);
+  if (strncmp(path, "url", level_two_size)) {
+    return HNFS_SECOND_LEVEL_URL;
+  }
+  if (strncmp(path, "comments", level_two_size)) {
+    return HNFS_SECOND_LEVEL_COMMENTS;
+  }
+  if (strncmp(path, "content", level_two_size)) {
+    return HNFS_SECOND_LEVEL_CONTENT;
+  }
+
+  return 0;
+}
 
 static int hnfs_getattr(const char *path, struct stat *stbuf)
 {
@@ -23,27 +128,37 @@ static int hnfs_getattr(const char *path, struct stat *stbuf)
 
   hnfs_post_update(&post_collection);
 
+  int depth = path_depth(path);
+
   memset(stbuf, 0, sizeof (struct stat));
-  if (strcmp(path, "/") == 0) {
+  if (depth == 0) {
     stbuf->st_mode = S_IFDIR | 0755;
     stbuf->st_nlink = 2;
   } else {
-    /* hacky, fix... */
-    /* TODO: */
-    path++;
+    /* find the index for the entry */
     pthread_mutex_lock(&post_collection.mutex);
-    for (int i = 0; i < HNFS_NUM_POSTS; i++) {
-      if (strcmp(path, post_collection.posts[i].title) == 0) {
-        found_post_entry = 1;
-        stbuf->st_mode = S_IFDIR | 0755;
-        stbuf->st_nlink = 2;
-        break;
-      }
-    }
-    pthread_mutex_unlock(&post_collection.mutex);
-    if (!found_post_entry) {
+    int post_entry = get_level_one_path_index(path);
+    if (post_entry < 0) {
+      pthread_mutex_unlock(&post_collection.mutex);
       return -ENOENT;
     }
+    /* great, now if it's a level one type just set all its properties
+     * as that of a directory */
+    if (depth == 1) {
+      stbuf->st_mode = S_IFDIR | 0755;
+      stbuf->st_nlink = 2;
+    }
+    else if (depth == 2) {
+      int l2_path_type = get_level_two_path_type(path);
+      if (l2_path_type < 0) {
+        pthread_mutex_unlock(&post_collection.mutex);
+        return -ENOENT;
+      }
+      /* read only regular file */
+      stbuf->st_mode = S_IFREG | 0444;
+      stbuf->st_nlink = 1;
+    }
+    pthread_mutex_unlock(&post_collection.mutex);
   }
 
   return res;

@@ -3,6 +3,7 @@
 
 #include <stdlib.h>
 #include <pthread.h>
+#include <time.h>
 
 #include "hnfs/decls.h"
 
@@ -16,6 +17,7 @@ typedef struct {
 typedef struct {
   hnfs_post_t posts[HNFS_NUM_POSTS];
   pthread_mutex_t mutex;
+  time_t update_time;
 } hnfs_post_collection_t;
 
 int

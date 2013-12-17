@@ -113,22 +113,30 @@ load_file(char *filename, char **buffer)
 int
 hnfs_post_update(hnfs_post_collection_t *collection)
 {
+  int ret = 0;
   const static int num_tokens = 512;
+  time_t cur_time = time(NULL);
+  char *json = NULL;
+  jsmn_parser p;
+  /* now get jsmn to parse it into a list of tokens */
+  /* 512 tokens should be enough for anybody... right? */
+  jsmntok_t tokens[num_tokens];
+  int posts_index;
+
   /* lock our collection mutex */
   pthread_mutex_lock(&collection->mutex);
-  char *json = NULL;
+  /* check to see if our data is old */
+  if (cur_time - collection->update_time < HNFS_TIME_BETWEEN_UPDATES) {
+    fprintf(stderr, "Data fresh. Skipping update.");
+    goto cleanup_lock;
+  }
 
   (void) fetch_url;
   //curl_saver_t saver;
   //fetch_url(front_page_api_path, &saver);
   //json = saver.data;
-  load_file("test.json", &json);
+  load_file("/Users/gerow/proj/hnfs/test.json", &json);
   assert(strlen(json) == 12113);
-
-  /* now get jsmn to parse it into a list of tokens */
-  jsmn_parser p;
-  /* 512 tokens should be enough for anybody... right? */
-  jsmntok_t tokens[num_tokens];
 
   jsmn_init(&p);
   assert(strlen(json) == 12113);
@@ -145,7 +153,7 @@ hnfs_post_update(hnfs_post_collection_t *collection)
   context.tokens = tokens;
   context.num_tokens = num_tokens;
 
-  int posts_index = aldn_key_value(&context, 0, "items");
+  posts_index = aldn_key_value(&context, 0, "items");
   if (posts_index < 0) {
     fprintf(stderr, "Failed to find index of posts inside object\n");
     exit(1);
@@ -171,10 +179,12 @@ hnfs_post_update(hnfs_post_collection_t *collection)
                         collection->posts[i].url,
                         HNFS_POST_STRING_SIZE);
   }
+
+  collection->update_time = cur_time;
 /*cleanup_saver:*/
   free(json);
-/*cleanup_lock:*/
+cleanup_lock:
   pthread_mutex_unlock(&collection->mutex);
 
-  return 0;
+  return ret;
 }
