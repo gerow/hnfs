@@ -64,7 +64,7 @@ fetch_url(char *url, curl_saver_t *saver)
   res = curl_easy_perform(curl);
   curl_easy_cleanup(curl);
 
-  return 0;
+  return res;
 }
 
 static int
@@ -163,6 +163,12 @@ hnfs_post_update(hnfs_post_collection_t *collection)
   assert(tokens[posts_index].size == 31);
   /* only the first 30 entires are what we're looking for */
   for (int i = 0; i < 30; i++) {
+    /* free this entry's content pointer if it is set */
+    if (collection->posts[i].content) {
+      free(collection->posts[i].content);
+      collection->posts[i].content = NULL;
+      collection->posts[i].content_update_time = 0;
+    }
     int cur_post = aldn_ith_value(&context, posts_index, i);
     printf("object type is %d\n", tokens[cur_post].type);
     assert(tokens[cur_post].type == JSMN_OBJECT);
@@ -187,4 +193,34 @@ cleanup_lock:
   pthread_mutex_unlock(&collection->mutex);
 
   return ret;
+}
+
+/*
+ * the calling thread should have a lock on the collection before
+ * calling this function
+ */
+int hnfs_post_fetch_content(hnfs_post_t *post)
+{
+  if ((time(NULL) - post->content_update_time) < HNFS_TIME_BETWEEN_UPDATES) {
+    fprintf(stderr, "Content fresh. Skipping update.\n");
+    return 0;
+  }
+
+  /* if content is allocated free it */
+  if (post->content) {
+    free(post->content);
+  }
+
+  curl_saver_t saver = {
+    .data = NULL,
+    .size = 0
+  };
+  int res = fetch_url(post->url, &saver);
+  if (res < 0) {
+    return res;
+  }
+  post->content = saver.data;
+  post->content_update_time = time(NULL);
+
+  return 0;
 }

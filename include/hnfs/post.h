@@ -12,6 +12,8 @@ typedef struct {
   char url[HNFS_POST_STRING_SIZE + 1];
   char user[HNFS_POST_STRING_SIZE + 1];
   char id[HNFS_POST_STRING_SIZE + 1];
+  char *content;
+  time_t content_update_time;
 } hnfs_post_t;
 
 typedef struct {
@@ -22,5 +24,8 @@ typedef struct {
 
 int
 hnfs_post_update(hnfs_post_collection_t *collection);
+
+int
+hnfs_post_fetch_content(hnfs_post_t *post);
 
 #endif /* HNFS_POST_H_ */

@@ -175,7 +175,8 @@ static int hnfs_getattr(const char *path, struct stat *stbuf)
         stbuf->st_size = 0;
         break;
       case HNFS_SECOND_LEVEL_CONTENT:
-        stbuf->st_size = 0;
+        hnfs_post_fetch_content(&post_collection.posts[post_entry]);
+        stbuf->st_size = strlen(post_collection.posts[post_entry].content);
         break;
       case HNFS_SECOND_LEVEL_REDIRECT:
         /* 
@@ -307,7 +308,7 @@ int hnfs_read_str_with_newline(const char *str,
   return ret;
 }
 
-int hnfs_read_content(const char *str, char *buf, size_t size, off_t offset)
+int hnfs_read_redirect(const char *str, char *buf, size_t size, off_t offset)
 {
   char output[sizeof(content_template) +  sizeof(post_collection.posts[0].url)];
   sprintf(output, content_template, str);
@@ -353,10 +354,14 @@ static int hnfs_read(const char *path, char *buf, size_t size, off_t offset,
     ret = 0;
     break;
   case HNFS_SECOND_LEVEL_CONTENT:
-    ret = 0;
+    hnfs_post_fetch_content(&post_collection.posts[post_index]);
+    ret = hnfs_read_str(post_collection.posts[post_index].content,
+                        buf,
+                        size,
+                        offset);
     break;
   case HNFS_SECOND_LEVEL_REDIRECT:
-    ret = hnfs_read_content(post_collection.posts[post_index].url,
+    ret = hnfs_read_redirect(post_collection.posts[post_index].url,
                             buf,
                             size,
                             offset);
