@@ -88,6 +88,7 @@ int get_level_one_path_index(const char *path)
 #define HNFS_SECOND_LEVEL_URL 0
 #define HNFS_SECOND_LEVEL_COMMENTS 1
 #define HNFS_SECOND_LEVEL_CONTENT 2
+#define HNFS_SECOND_LEVEL_REDIRECT 3
 /*
  * Get the second level of the path. If we have something like
  * "/storyname/url" we would return the number for the url type, which
@@ -118,6 +119,9 @@ int get_level_two_path_type(const char *path)
   } */
   if (strncmp(path, "content.html", level_two_size) == 0) {
     return HNFS_SECOND_LEVEL_CONTENT;
+  }
+  if (strncmp(path, "redirect.html", level_two_size) == 0) {
+    return HNFS_SECOND_LEVEL_REDIRECT;
   }
 
   return -1;
@@ -170,6 +174,9 @@ static int hnfs_getattr(const char *path, struct stat *stbuf)
         stbuf->st_size = 0;
         break;
       case HNFS_SECOND_LEVEL_CONTENT:
+        stbuf->st_size = 0;
+        break;
+      case HNFS_SECOND_LEVEL_REDIRECT:
         stbuf->st_size = sizeof(content_template) -
                          3 +
                          strlen(post_collection.posts[post_entry].url);
@@ -220,6 +227,7 @@ static int hnfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
     filler(buf, "url", NULL, 0);
     /* filler(buf, "comments", NULL, 0); */
     filler(buf, "content.html", NULL, 0);
+    filler(buf, "redirect.html", NULL, 0);
 
     pthread_mutex_unlock(&post_collection.mutex);
 
@@ -322,6 +330,9 @@ static int hnfs_read(const char *path, char *buf, size_t size, off_t offset,
     ret = 0;
     break;
   case HNFS_SECOND_LEVEL_CONTENT:
+    ret = 0;
+    break;
+  case HNFS_SECOND_LEVEL_REDIRECT:
     ret = hnfs_read_content(post_collection.posts[post_index].url,
                             buf,
                             size,
