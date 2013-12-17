@@ -113,7 +113,7 @@ int get_level_two_path_type(const char *path)
   if (strncmp(path, "comments", level_two_size) == 0) {
     return HNFS_SECOND_LEVEL_COMMENTS;
   }
-  if (strncmp(path, "content", level_two_size) == 0) {
+  if (strncmp(path, "content.html", level_two_size) == 0) {
     return HNFS_SECOND_LEVEL_CONTENT;
   }
 
@@ -214,7 +214,7 @@ static int hnfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
     filler(buf, "..", NULL, 0);
     filler(buf, "url", NULL, 0);
     filler(buf, "comments", NULL, 0);
-    filler(buf, "content", NULL, 0);
+    filler(buf, "content.html", NULL, 0);
 
     pthread_mutex_unlock(&post_collection.mutex);
 
