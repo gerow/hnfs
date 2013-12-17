@@ -17,6 +17,9 @@ static hnfs_post_collection_t post_collection = {
   .update_time = 0
 };
 
+const char content_template[] = "<html><head><meta http-equiv=\"refresh\""
+  "content=\"0;URL='%s'\" /></head></html>";
+
 /* 
  * incredibly simply function to check if the given path is
  * the root path
@@ -73,7 +76,7 @@ int get_level_one_path_index(const char *path)
   }
   assert(level_one_size <= HNFS_POST_STRING_SIZE);
   for (int i = 0; i < HNFS_NUM_POSTS; i++) {
-    if (strncmp(path, post_collection.posts[i].title, level_one_size)) {
+    if (strncmp(path, post_collection.posts[i].title, level_one_size) == 0) {
       return i;
     }
   }
@@ -110,9 +113,9 @@ int get_level_two_path_type(const char *path)
   if (strncmp(path, "url", level_two_size) == 0) {
     return HNFS_SECOND_LEVEL_URL;
   }
-  if (strncmp(path, "comments", level_two_size) == 0) {
+  /* if (strncmp(path, "comments", level_two_size) == 0) {
     return HNFS_SECOND_LEVEL_COMMENTS;
-  }
+  } */
   if (strncmp(path, "content.html", level_two_size) == 0) {
     return HNFS_SECOND_LEVEL_CONTENT;
   }
@@ -167,7 +170,9 @@ static int hnfs_getattr(const char *path, struct stat *stbuf)
         stbuf->st_size = 0;
         break;
       case HNFS_SECOND_LEVEL_CONTENT:
-        stbuf->st_size = 0;
+        stbuf->st_size = sizeof(content_template) -
+                         3 +
+                         strlen(post_collection.posts[post_entry].url);
         break;
       }
     }
@@ -213,7 +218,7 @@ static int hnfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
     filler(buf, ".", NULL, 0);
     filler(buf, "..", NULL, 0);
     filler(buf, "url", NULL, 0);
-    filler(buf, "comments", NULL, 0);
+    /* filler(buf, "comments", NULL, 0); */
     filler(buf, "content.html", NULL, 0);
 
     pthread_mutex_unlock(&post_collection.mutex);
@@ -274,6 +279,14 @@ int hnfs_read_str(const char *str, char *buf, size_t size, off_t offset)
   return ret;
 }
 
+int hnfs_read_content(const char *str, char *buf, size_t size, off_t offset)
+{
+  char output[sizeof(content_template) +  sizeof(post_collection.posts[0].url)];
+  sprintf(output, content_template, str);
+  fprintf(stderr, "CONTENT IS %s\n", output);
+  return hnfs_read_str(output, buf, size, offset);
+}
+
 static int hnfs_read(const char *path, char *buf, size_t size, off_t offset,
                       struct fuse_file_info *fi)
 {
@@ -309,7 +322,10 @@ static int hnfs_read(const char *path, char *buf, size_t size, off_t offset,
     ret = 0;
     break;
   case HNFS_SECOND_LEVEL_CONTENT:
-    ret = 0;
+    ret = hnfs_read_content(post_collection.posts[post_index].url,
+                            buf,
+                            size,
+                            offset);
     break;
   }
 cleanup_mutex:
