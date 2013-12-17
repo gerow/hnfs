@@ -107,28 +107,30 @@ int get_level_two_path_type(const char *path)
   }
 
   assert(level_two_size <= HNFS_POST_STRING_SIZE);
-  if (strncmp(path, "url", level_two_size)) {
+  if (strncmp(path, "url", level_two_size) == 0) {
     return HNFS_SECOND_LEVEL_URL;
   }
-  if (strncmp(path, "comments", level_two_size)) {
+  if (strncmp(path, "comments", level_two_size) == 0) {
     return HNFS_SECOND_LEVEL_COMMENTS;
   }
-  if (strncmp(path, "content", level_two_size)) {
+  if (strncmp(path, "content", level_two_size) == 0) {
     return HNFS_SECOND_LEVEL_CONTENT;
   }
 
-  return 0;
+  return -1;
 }
 
 static int hnfs_getattr(const char *path, struct stat *stbuf)
 {
   fprintf(stderr, "getattr called for %s\n", path);
   int res = 0;
-  int found_post_entry = 0;
 
   hnfs_post_update(&post_collection);
 
   int depth = path_depth(path);
+  if (depth < 0) {
+    return -ENOENT;
+  }
 
   memset(stbuf, 0, sizeof (struct stat));
   if (depth == 0) {
@@ -157,6 +159,17 @@ static int hnfs_getattr(const char *path, struct stat *stbuf)
       /* read only regular file */
       stbuf->st_mode = S_IFREG | 0444;
       stbuf->st_nlink = 1;
+      switch (l2_path_type) {
+      case HNFS_SECOND_LEVEL_URL:
+        stbuf->st_size = strlen(post_collection.posts[post_entry].url);
+        break;
+      case HNFS_SECOND_LEVEL_COMMENTS:
+        stbuf->st_size = 0;
+        break;
+      case HNFS_SECOND_LEVEL_CONTENT:
+        stbuf->st_size = 0;
+        break;
+      }
     }
     pthread_mutex_unlock(&post_collection.mutex);
   }
@@ -172,7 +185,13 @@ static int hnfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
   
   fprintf(stderr, "readdir called for %s\n", path);
 
-  if (strcmp(path, "/") == 0) {
+  int depth = path_depth(path);
+
+  if (depth < 0) {
+    return -ENOENT;
+  }
+
+  if (depth == 0) {
     filler(buf, ".", NULL, 0);
     filler(buf, "..", NULL, 0);
     hnfs_post_update(&post_collection);
@@ -183,51 +202,76 @@ static int hnfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
     }
     pthread_mutex_unlock(&post_collection.mutex);
     return 0;
-  } else {
+  } else if (depth == 1) {
     /* otherwise it's probably trying to find entries for a specific post */
-    int chr_loc = 0;
-    /* it should be 0 since the first char in a path is / */
-    if (chr_loc != 0) {
+    pthread_mutex_lock(&post_collection.mutex);
+    int post_index = get_level_one_path_index(path);
+    if (post_index < 0) {
+      pthread_mutex_unlock(&post_collection.mutex);
       return -ENOENT;
     }
-    /* get a new pointer to the part of the string after the slash */
-    const char *dirname = path + chr_loc + 1;
-    fprintf(stderr, "trying to find %s\n", dirname);
-    pthread_mutex_lock(&post_collection.mutex);
-    int found_post_entry = 0;
-    for (int i = 0; i < HNFS_NUM_POSTS; i++) {
-      if (strcmp(dirname, post_collection.posts[i].title) == 0) {
-        /* great, we found the entry! Now just fill it with a link
-         * to the current dir, previous dir, and a url, and comments file */
-        filler(buf, ".", NULL, 0);
-        filler(buf, "..", NULL, 0);
-        filler(buf, "url", NULL, 0);
-        filler(buf, "comments", NULL, 0);
-        found_post_entry = 1;
-        break;
-      }
-    }
+    filler(buf, ".", NULL, 0);
+    filler(buf, "..", NULL, 0);
+    filler(buf, "url", NULL, 0);
+    filler(buf, "comments", NULL, 0);
+    filler(buf, "content", NULL, 0);
+
     pthread_mutex_unlock(&post_collection.mutex);
-    if (found_post_entry) {
-      return 0;
-    }
-    return -ENOENT;
+
+    return 0;
   }
 
-  return 0;
+  return -ENOENT;
 }
 
 static int hnfs_open(const char *path, struct fuse_file_info *fi)
 {
   fprintf(stderr, "open called for %s\n", path);
 
-  //if (strcmp(path, hello_path) != 0)
-  //  return -ENOENT;
+  /* make sure this is a valid entry */
+  int depth = path_depth(path);
+  if (depth < 0) {
+    return -ENOENT;
+  }
 
+  if (depth != 0) {
+    pthread_mutex_lock(&post_collection.mutex);
+    int post_index = get_level_one_path_index(path);
+    pthread_mutex_unlock(&post_collection.mutex);
+    if (post_index < 0) {
+      return -ENOENT;
+    }
+    if (depth == 2) {
+      int l2_type = get_level_two_path_type(path);
+      if (l2_type < 0) {
+        return -ENOENT;
+      }
+    }
+  }
+
+  /* if not opened readonly disallow */
   if ((fi->flags & 3) != O_RDONLY)
     return -EACCES;
 
   return 0;
+}
+
+int hnfs_read_str(const char *str, char *buf, size_t size, off_t offset)
+{
+  size_t str_len = strlen(str);
+  if (offset >= ((long long)str_len)) {
+    return 0;
+  }
+  str += offset;
+  str_len -= offset;
+  int ret = size;
+  if (str_len < size) {
+    ret = str_len;
+  }
+
+  memcpy(buf, str, ret);
+
+  return ret;
 }
 
 static int hnfs_read(const char *path, char *buf, size_t size, off_t offset,
@@ -238,6 +282,40 @@ static int hnfs_read(const char *path, char *buf, size_t size, off_t offset,
   (void) size;
   (void) offset;
   (void) fi;
+
+  int ret = 0;
+
+  int depth = path_depth(path);
+  if (depth != 2) {
+    return -ENOENT;
+  }
+  pthread_mutex_lock(&post_collection.mutex);
+
+  int post_index = get_level_one_path_index(path);
+  if (post_index < 0) {
+    ret = -ENOENT;
+    goto cleanup_mutex;
+  }
+  int path_type = get_level_two_path_type(path);
+  if (path_type < 0) {
+    ret = -ENOENT;
+    goto cleanup_mutex;
+  }
+  switch (path_type) {
+  case HNFS_SECOND_LEVEL_URL:
+    ret = hnfs_read_str(post_collection.posts[post_index].url, buf, size, offset);
+    break;
+  case HNFS_SECOND_LEVEL_COMMENTS:
+    ret = 0;
+    break;
+  case HNFS_SECOND_LEVEL_CONTENT:
+    ret = 0;
+    break;
+  }
+cleanup_mutex:
+  pthread_mutex_unlock(&post_collection.mutex);
+
+  return ret;
   /*
   fprintf(stderr, "read called for %s\n", path);
 
@@ -255,8 +333,6 @@ static int hnfs_read(const char *path, char *buf, size_t size, off_t offset,
     size = 0;
   }
   */
-
-  return 0;
 }
 
 static struct fuse_operations hnfs_oper = {
