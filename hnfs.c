@@ -18,7 +18,7 @@ static hnfs_post_collection_t post_collection = {
 };
 
 const char content_template[] = "<html><head><meta http-equiv=\"refresh\""
-  "content=\"0;URL='%s'\" /></head></html>";
+  "content=\"0;URL='%s'\" /></head></html>\n";
 
 /* 
  * incredibly simply function to check if the given path is
@@ -168,7 +168,8 @@ static int hnfs_getattr(const char *path, struct stat *stbuf)
       stbuf->st_nlink = 1;
       switch (l2_path_type) {
       case HNFS_SECOND_LEVEL_URL:
-        stbuf->st_size = strlen(post_collection.posts[post_entry].url);
+        /* add 1 for the newline at the end */
+        stbuf->st_size = strlen(post_collection.posts[post_entry].url) + 1;
         break;
       case HNFS_SECOND_LEVEL_COMMENTS:
         stbuf->st_size = 0;
@@ -177,9 +178,14 @@ static int hnfs_getattr(const char *path, struct stat *stbuf)
         stbuf->st_size = 0;
         break;
       case HNFS_SECOND_LEVEL_REDIRECT:
+        /* 
+         * -3 is to remove the %s and \0 from the template. The +1 is
+         * for a newline at the end
+         */
         stbuf->st_size = sizeof(content_template) -
                          3 +
-                         strlen(post_collection.posts[post_entry].url);
+                         strlen(post_collection.posts[post_entry].url) +
+                         1;
         break;
       }
     }
@@ -287,6 +293,20 @@ int hnfs_read_str(const char *str, char *buf, size_t size, off_t offset)
   return ret;
 }
 
+int hnfs_read_str_with_newline(const char *str,
+                               char *buf,
+                               size_t size,
+                               off_t offset)
+{
+  int ret = hnfs_read_str(str, buf, size, offset);
+  if (ret < ((int) size)) {
+    *(buf + ret) = '\n';
+    ret++;
+  }
+
+  return ret;
+}
+
 int hnfs_read_content(const char *str, char *buf, size_t size, off_t offset)
 {
   char output[sizeof(content_template) +  sizeof(post_collection.posts[0].url)];
@@ -324,7 +344,10 @@ static int hnfs_read(const char *path, char *buf, size_t size, off_t offset,
   }
   switch (path_type) {
   case HNFS_SECOND_LEVEL_URL:
-    ret = hnfs_read_str(post_collection.posts[post_index].url, buf, size, offset);
+    ret = hnfs_read_str_with_newline(post_collection.posts[post_index].url,
+                                     buf,
+                                     size,
+                                     offset);
     break;
   case HNFS_SECOND_LEVEL_COMMENTS:
     ret = 0;
