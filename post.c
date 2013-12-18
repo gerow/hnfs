@@ -215,8 +215,12 @@ int hnfs_post_fetch_content(hnfs_post_t *post)
     .data = NULL,
     .size = 0
   };
-  int res = fetch_url(post->url, &saver);
-  if (res < 0) {
+  CURLcode res = fetch_url(post->url, &saver);
+  if (res != CURLE_OK) {
+    fprintf(stderr,
+            "Failed to fetch url %s: %s\n",
+            post->url,
+            curl_easy_strerror(res));
     return res;
   }
   post->content = saver.data;

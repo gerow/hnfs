@@ -85,11 +85,26 @@ int get_level_one_path_index(const char *path)
   return -ENOENT;
 }
 
-#define HNFS_SECOND_LEVEL_URL 0
-#define HNFS_SECOND_LEVEL_COMMENTS 1
-#define HNFS_SECOND_LEVEL_CONTENT 2
-#define HNFS_SECOND_LEVEL_REDIRECT 3
-#define HNFS_SECOND_LEVEL_USER 4
+
+typedef enum {
+  HNFS_SECOND_LEVEL_URL,
+  HNFS_SECOND_LEVEL_CONTENT,
+  HNFS_SECOND_LEVEL_REDIRECT,
+  HNFS_SECOND_LEVEL_USER,
+} hnfs_second_level_type_t;
+
+typedef struct strmap {
+  const char *name;
+  int val;
+} strmap_t;
+
+strmap_t second_level_names[] = {
+  {"url", HNFS_SECOND_LEVEL_URL},
+  {"content.html", HNFS_SECOND_LEVEL_CONTENT},
+  {"redirect.html", HNFS_SECOND_LEVEL_REDIRECT},
+  {"user", HNFS_SECOND_LEVEL_USER}
+};
+
 /*
  * Get the second level of the path. If we have something like
  * "/storyname/url" we would return the number for the url type, which
@@ -112,20 +127,13 @@ int get_level_two_path_type(const char *path)
   }
 
   assert(level_two_size <= HNFS_POST_STRING_SIZE);
-  if (strncmp(path, "url", level_two_size) == 0) {
-    return HNFS_SECOND_LEVEL_URL;
-  }
-  /* if (strncmp(path, "comments", level_two_size) == 0) {
-    return HNFS_SECOND_LEVEL_COMMENTS;
-  } */
-  if (strncmp(path, "content.html", level_two_size) == 0) {
-    return HNFS_SECOND_LEVEL_CONTENT;
-  }
-  if (strncmp(path, "redirect.html", level_two_size) == 0) {
-    return HNFS_SECOND_LEVEL_REDIRECT;
-  }
-  if (strncmp(path, "user", level_two_size) == 0) {
-    return HNFS_SECOND_LEVEL_USER;
+
+  for (int i = 0;
+       i < (int)(sizeof(second_level_names) / sizeof(second_level_names[0]));
+       i++) {
+    if (strncmp(path, second_level_names[i].name, level_two_size) == 0) {
+      return second_level_names[i].val;
+    }
   }
 
   return -1;
@@ -174,9 +182,6 @@ static int hnfs_getattr(const char *path, struct stat *stbuf)
       case HNFS_SECOND_LEVEL_URL:
         /* add 1 for the newline at the end */
         stbuf->st_size = strlen(post_collection.posts[post_entry].url) + 1;
-        break;
-      case HNFS_SECOND_LEVEL_COMMENTS:
-        stbuf->st_size = 0;
         break;
       case HNFS_SECOND_LEVEL_CONTENT:
         hnfs_post_fetch_content(&post_collection.posts[post_entry]);
@@ -244,13 +249,14 @@ static int hnfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
       pthread_mutex_unlock(&post_collection.mutex);
       return -ENOENT;
     }
+
     filler(buf, ".", NULL, 0);
     filler(buf, "..", NULL, 0);
-    filler(buf, "url", NULL, 0);
-    /* filler(buf, "comments", NULL, 0); */
-    filler(buf, "content.html", NULL, 0);
-    filler(buf, "redirect.html", NULL, 0);
-    filler(buf, "user", NULL, 0);
+    for (int i = 0;
+         i < (int)(sizeof(second_level_names) / sizeof(second_level_names[0]));
+         i++) {
+      filler(buf, second_level_names[i].name, NULL, 0);
+    }
 
     pthread_mutex_unlock(&post_collection.mutex);
 
@@ -365,9 +371,6 @@ static int hnfs_read(const char *path, char *buf, size_t size, off_t offset,
                                      buf,
                                      size,
                                      offset);
-    break;
-  case HNFS_SECOND_LEVEL_COMMENTS:
-    ret = 0;
     break;
   case HNFS_SECOND_LEVEL_CONTENT:
     hnfs_post_fetch_content(&post_collection.posts[post_index]);
