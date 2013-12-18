@@ -89,6 +89,7 @@ int get_level_one_path_index(const char *path)
 #define HNFS_SECOND_LEVEL_COMMENTS 1
 #define HNFS_SECOND_LEVEL_CONTENT 2
 #define HNFS_SECOND_LEVEL_REDIRECT 3
+#define HNFS_SECOND_LEVEL_USER 4
 /*
  * Get the second level of the path. If we have something like
  * "/storyname/url" we would return the number for the url type, which
@@ -122,6 +123,9 @@ int get_level_two_path_type(const char *path)
   }
   if (strncmp(path, "redirect.html", level_two_size) == 0) {
     return HNFS_SECOND_LEVEL_REDIRECT;
+  }
+  if (strncmp(path, "user", level_two_size) == 0) {
+    return HNFS_SECOND_LEVEL_USER;
   }
 
   return -1;
@@ -176,7 +180,15 @@ static int hnfs_getattr(const char *path, struct stat *stbuf)
         break;
       case HNFS_SECOND_LEVEL_CONTENT:
         hnfs_post_fetch_content(&post_collection.posts[post_entry]);
-        stbuf->st_size = strlen(post_collection.posts[post_entry].content);
+        if (post_collection.posts[post_entry].content) {
+          stbuf->st_size = strlen(post_collection.posts[post_entry].content);
+        } else {
+          /* 
+           * if we couldn't download the content for any reason just say the
+           * size is 0
+           */
+          stbuf->st_size = 0;
+        }
         break;
       case HNFS_SECOND_LEVEL_REDIRECT:
         /* 
@@ -187,6 +199,9 @@ static int hnfs_getattr(const char *path, struct stat *stbuf)
                          3 +
                          strlen(post_collection.posts[post_entry].url) +
                          1;
+        break;
+      case HNFS_SECOND_LEVEL_USER:
+        stbuf->st_size = strlen(post_collection.posts[post_entry].user) + 1;
         break;
       }
     }
@@ -235,6 +250,7 @@ static int hnfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
     /* filler(buf, "comments", NULL, 0); */
     filler(buf, "content.html", NULL, 0);
     filler(buf, "redirect.html", NULL, 0);
+    filler(buf, "user", NULL, 0);
 
     pthread_mutex_unlock(&post_collection.mutex);
 
@@ -355,10 +371,15 @@ static int hnfs_read(const char *path, char *buf, size_t size, off_t offset,
     break;
   case HNFS_SECOND_LEVEL_CONTENT:
     hnfs_post_fetch_content(&post_collection.posts[post_index]);
-    ret = hnfs_read_str(post_collection.posts[post_index].content,
-                        buf,
-                        size,
-                        offset);
+    if (post_collection.posts[post_index].content) {
+      ret = hnfs_read_str(post_collection.posts[post_index].content,
+                          buf,
+                          size,
+                          offset);
+    } else {
+      /* if we couldn't load the content, just return that 0 bytes were read */
+      ret = 0;
+    }
     break;
   case HNFS_SECOND_LEVEL_REDIRECT:
     ret = hnfs_read_redirect(post_collection.posts[post_index].url,
@@ -366,28 +387,17 @@ static int hnfs_read(const char *path, char *buf, size_t size, off_t offset,
                             size,
                             offset);
     break;
+  case HNFS_SECOND_LEVEL_USER:
+    ret = hnfs_read_str_with_newline(post_collection.posts[post_index].user,
+                                     buf,
+                                     size,
+                                     offset);
+    break;
   }
 cleanup_mutex:
   pthread_mutex_unlock(&post_collection.mutex);
 
   return ret;
-  /*
-  fprintf(stderr, "read called for %s\n", path);
-
-
-  size_t len;
-  (void) fi;
-  if (strcmp(path, hello_path) != 0)
-    return -ENOENT;
-  len = strlen(hello_str);
-  if (offset < len) {
-    if (offset + size > len)
-      size = len - offset;
-    memcpy(buf, hello_str + offset, size);
-  } else {
-    size = 0;
-  }
-  */
 }
 
 static struct fuse_operations hnfs_oper = {
