@@ -285,37 +285,6 @@ static int hnfs_getattr(const char *path, struct stat *stbuf)
                             stbuf);
         }
       }
-      switch (l2_path_type) {
-      case HNFS_SECOND_LEVEL_URL:
-        /* add 1 for the newline at the end */
-        stbuf->st_size = strlen(post_collection.posts[post_entry].url) + 1;
-        break;
-      case HNFS_SECOND_LEVEL_CONTENT:
-        hnfs_post_fetch_content(&post_collection.posts[post_entry]);
-        if (post_collection.posts[post_entry].content) {
-          stbuf->st_size = strlen(post_collection.posts[post_entry].content);
-        } else {
-          /* 
-           * if we couldn't download the content for any reason just say the
-           * size is 0
-           */
-          stbuf->st_size = 0;
-        }
-        break;
-      case HNFS_SECOND_LEVEL_REDIRECT:
-        /* 
-         * -3 is to remove the %s and \0 from the template. The +1 is
-         * for a newline at the end
-         */
-        stbuf->st_size = sizeof(content_template) -
-                         3 +
-                         strlen(post_collection.posts[post_entry].url) +
-                         1;
-        break;
-      case HNFS_SECOND_LEVEL_USER:
-        stbuf->st_size = strlen(post_collection.posts[post_entry].user) + 1;
-        break;
-      }
     }
     pthread_mutex_unlock(&post_collection.mutex);
   }
