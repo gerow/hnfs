@@ -129,6 +129,21 @@ l2_getattr_url(hnfs_post_t *post, struct stat *stbuf)
 }
 
 static int
+l2_read_url(hnfs_post_t *post,
+            char *buf,
+            size_t size,
+            off_t offset,
+            struct fuse_file_info *fi)
+{
+  (void) fi;
+
+  return read_str_with_newline(post->url,
+                               buf,
+                               size,
+                               offset);
+}
+
+static int
 l2_getattr_content(hnfs_post_t *post, struct stat *stbuf)
 {
   hnfs_post_fetch_content(post);
@@ -143,6 +158,26 @@ l2_getattr_content(hnfs_post_t *post, struct stat *stbuf)
   }
 
   return 0;
+}
+
+static int
+l2_read_content(hnfs_post_t *post,
+                char *buf,
+                size_t size,
+                off_t offset,
+                struct fuse_file_info *fi)
+{
+  (void) fi;
+
+  hnfs_post_fetch_content(post);
+  if (!post->content) {
+    return 0;
+  }
+
+  return read_str(post->content,
+                  buf,
+                  size,
+                  offset);
 }
 
 static int
@@ -161,11 +196,40 @@ l2_getattr_redirect(hnfs_post_t *post, struct stat *stbuf)
 }
 
 static int
+l2_read_redirect(hnfs_post_t *post,
+                 char *buf,
+                 size_t size,
+                 off_t offset,
+                 struct fuse_file_info *fi)
+{
+  (void) fi;
+
+  char output[sizeof(content_template) +  sizeof(post_collection.posts[0].url)];
+  sprintf(output, content_template, post->url);
+  return read_str(output, buf, size, offset);
+}
+
+static int
 l2_getattr_user(hnfs_post_t *post, struct stat *stbuf)
 {
   stbuf->st_size = strlen(post->user) + 1;
 
   return 0;
+}
+
+static int
+l2_read_user(hnfs_post_t *post,
+             char *buf,
+             size_t size,
+             off_t offset,
+             struct fuse_file_info *fi)
+{
+  (void) fi;
+
+  return read_str_with_newline(post->user,
+                               buf,
+                               size,
+                               offset);
 }
 
 static int
@@ -196,10 +260,30 @@ typedef struct strmap {
 } strmap_t;
 
 strmap_t l2_map[] = {
-  {"url", HNFS_SECOND_LEVEL_URL, l2_getattr_url},
-  {"content.html", HNFS_SECOND_LEVEL_CONTENT, l2_getattr_content},
-  {"redirect.html", HNFS_SECOND_LEVEL_REDIRECT, l2_getattr_redirect},
-  {"user", HNFS_SECOND_LEVEL_USER, l2_getattr_user}
+  {
+    "url",
+    HNFS_SECOND_LEVEL_URL,
+    l2_getattr_url,
+    l2_read_url
+  },
+  {
+    "content.html",
+    HNFS_SECOND_LEVEL_CONTENT,
+    l2_getattr_content,
+    l2_read_content
+  },
+  {
+    "redirect.html",
+    HNFS_SECOND_LEVEL_REDIRECT,
+    l2_getattr_redirect,
+    l2_read_redirect
+  },
+  {
+    "user",
+    HNFS_SECOND_LEVEL_USER,
+    l2_getattr_user,
+    l2_read_user
+  }
 };
 
 const static unsigned int l2_types = (sizeof(l2_map) /
@@ -406,37 +490,15 @@ static int hnfs_read(const char *path,
     ret = -ENOENT;
     goto cleanup_mutex;
   }
-  switch (path_type) {
-  case HNFS_SECOND_LEVEL_URL:
-    ret = read_str_with_newline(post_collection.posts[post_index].url,
-                                     buf,
-                                     size,
-                                     offset);
-    break;
-  case HNFS_SECOND_LEVEL_CONTENT:
-    hnfs_post_fetch_content(&post_collection.posts[post_index]);
-    if (post_collection.posts[post_index].content) {
-      ret = read_str(post_collection.posts[post_index].content,
-                          buf,
-                          size,
-                          offset);
-    } else {
-      /* if we couldn't load the content, just return that 0 bytes were read */
-      ret = 0;
+
+  for (unsigned int i = 0; i < l2_types; i++) {
+    if (path_type == l2_map[i].val) {
+      ret = l2_map[i].read(&post_collection.posts[post_index],
+                           buf,
+                           size,
+                           offset,
+                           fi);
     }
-    break;
-  case HNFS_SECOND_LEVEL_REDIRECT:
-    ret = read_redirect(post_collection.posts[post_index].url,
-                            buf,
-                            size,
-                            offset);
-    break;
-  case HNFS_SECOND_LEVEL_USER:
-    ret = read_str_with_newline(post_collection.posts[post_index].user,
-                                     buf,
-                                     size,
-                                     offset);
-    break;
   }
 cleanup_mutex:
   pthread_mutex_unlock(&post_collection.mutex);
