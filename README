@@ -1,0 +1,41 @@
+hnfs
+===
+
+hnfs is a fuse filesystem for mounting hacker news (http://news.ycombinator.com)
+as a filesystem.
+
+Mounting it to a directory will fill that directory with a directory for each
+of the 30 stories on the front page. Each directory contains three files in
+it: content.html, redirect.html, and url. Content.html will contain the
+raw html of the story linked. This may not always work correctly, so
+redirect.html has html that triggers an http redirect to the url for the given
+story.  Either way, opening these files in a browser should lead allow you
+to read the posted story. The url file simply contains the url of the story.
+
+Currently
+===
+
+Right now, we're just reading stories from a json file we have stored within
+the project. This is beacuse hn does not have a proper api for accessing
+stories on the front page. Once I hnfs working reliably with the json file
+I'll probably write something with ruby and Sinatra to scrape the front page
+and put an api in front of it. This isn't ideal... but it seems to be the only
+way right now.
+
+Plans
+===
+I'm hoping to have a way to nicely convert comments into a file that can be
+easily read in the terminal. That will most likely look something like this:
+
+coolguy102: I think that startup culture is so and so, but really using
+anything other than javascript in modern projects is just asking to be labeled
+as a dinosaur.
+  newshacker420: Actually, coolguy102, I think you might be behind on the times
+  Clojure is really the way to go when it comes to today's projects.
+    coolguy102: Well sure, if you want to be some kind of functional
+    programming hipster about it.
+  noonecaresaboutme: Actually, I think you'll find that using Enterprise
+  Java Beans by Oracle for enterprises in warehouses, enterprise version
+  2.53 actually creates a nice workflow where only 80% of your code ends
+  up being boilerplace.
+pg: You should probably be using common lisp.
