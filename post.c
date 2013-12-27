@@ -7,8 +7,8 @@
 
 #include "aldn/aldn.h"
 
-static const char
-front_page_api_path[] = "http://api.ihackernews.com/page";
+static char *
+front_page_api_path = "http://localhost:4567/";
 
 typedef struct {
   char *data;
@@ -132,16 +132,16 @@ hnfs_post_update(hnfs_post_collection_t *collection)
   }
 
   (void) fetch_url;
-  //curl_saver_t saver;
-  //fetch_url(front_page_api_path, &saver);
-  //json = saver.data;
-  load_file("/Users/gerow/proj/hnfs/test.json", &json);
-  assert(strlen(json) == 12113);
+  curl_saver_t saver;
+  fetch_url(front_page_api_path, &saver);
+  json = saver.data;
+  //load_file("/Users/gerow/proj/hnfs/test.json", &json);
+  //assert(strlen(json) == 12113);
 
   jsmn_init(&p);
-  assert(strlen(json) == 12113);
+  //assert(strlen(json) == 12113);
   int jsmn_res = jsmn_parse(&p, json, tokens, 512);
-  assert(strlen(json) == 12113);
+  //assert(strlen(json) == 12113);
   if (jsmn_res != JSMN_SUCCESS) {
     fprintf(stderr, "jsmn had trouble parsing the data, dumping:\n");
     fprintf(stderr, "%s\n", json);
@@ -160,7 +160,6 @@ hnfs_post_update(hnfs_post_collection_t *collection)
   }
 
   assert(tokens[posts_index].type == JSMN_ARRAY);
-  assert(tokens[posts_index].size == 31);
   /* only the first 30 entires are what we're looking for */
   for (int i = 0; i < 30; i++) {
     /* free this entry's content pointer if it is set */

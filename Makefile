@@ -10,6 +10,8 @@ CFLAGS      += -pthread
 CFLAGS      += -Wall -Wextra -pedantic
 CFLAGS      += -g
 CFLAGS      += -std=c99
+CFLAGS      += -v
+CFLAGS      += -fshow-source-location
 
 .PHONY: all clean
 

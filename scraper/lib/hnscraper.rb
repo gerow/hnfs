@@ -25,6 +25,6 @@ class HNScraper
       story[:comments] = @url + story[:comments]
       story
     }
-    return stories
+    return {:items => stories}
   end
 end
